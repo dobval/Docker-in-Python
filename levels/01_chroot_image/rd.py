@@ -63,7 +63,6 @@ def create_container_root(image_name, image_dir, container_id, container_dir):
 
     return container_root
 
-
 @click.group()
 def cli():
     pass
