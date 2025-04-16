@@ -80,7 +80,6 @@ def contain(command, image_name, image_dir, container_id, container_dir):
                   'this with sudo)')
         raise e
 
-    # TODO: we added MS_REC here. wanna guess why?
     linux.mount(None, '/', None, linux.MS_PRIVATE | linux.MS_REC, None)
 
     new_root = create_container_root(
