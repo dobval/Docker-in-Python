@@ -34,10 +34,8 @@ def create_container_root(image_name, image_dir, container_id, container_dir):
     image_path = _get_image_path(image_name, image_dir)
     assert os.path.exists(image_path), "unable to locate image %s" % image_name
 
-    # TODO: Instead of creating the container_root and extracting to it,
-    #       create an images_root.
-    # keep only one rootfs per image and re-use it
-    container_root = _get_container_path(container_id, container_dir, 'rootfs')
+    # Create an images_root directory to keep only one rootfs per image and re-use it
+    images_root = os.path.join(container_dir, 'images_root', image_name)
 
     if not os.path.exists(container_root):
         os.makedirs(container_root)
@@ -47,13 +45,21 @@ def create_container_root(image_name, image_dir, container_id, container_dir):
                        if m.type not in (tarfile.CHRTYPE, tarfile.BLKTYPE)]
             t.extractall(container_root, members=members)
 
-    # TODO: create directories for copy-on-write (uppperdir), overlay workdir,
-    #       and a mount point
+    # Create directories for copy-on-write (upperdir), overlay workdir, and a mount point
+    container_root = _get_container_path(container_id, container_dir, 'rootfs')
+    upperdir = _get_container_path(container_id, container_dir, 'upperdir')
+    workdir = _get_container_path(container_id, container_dir, 'workdir')
+    mount_point = _get_container_path(container_id, container_dir, 'mount_point')
 
-    # TODO: mount the overlay (HINT: use the MS_NODEV flag to mount)
+    for dir_path in [upperdir, workdir, mount_point]:
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
 
-    return container_root  # return the mountpoint for the mounted overlayfs
+    # Mount the overlay (HINT: use the MS_NODEV flag to mount)
+    linux.mount('overlay', mount_point, 'overlay', 0,
+                'lowerdir={},upperdir={},workdir={}'.format(images_root, upperdir, workdir))
 
+    return mount_point  # return the mountpoint for the mounted overlayfs
 
 @click.group()
 def cli():
