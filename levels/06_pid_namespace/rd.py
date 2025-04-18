@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Docker From Scratch Workshop - Level 5: Add UTS namespace.
+"""Docker From Scratch Workshop - Level 6: Add PID namespace.
 
-Goal: Have your own private hostname!
+Goal: Have your new process start with PID 1 :)
 """
 
 
@@ -50,7 +50,7 @@ def create_container_root(image_name, image_dir, container_id, container_dir):
         if not os.path.exists(d):
             os.makedirs(d)
 
-    # Mount the overlay  
+    # Mount the overlay (HINT: use the MS_NODEV flag to mount)
     linux.mount(
         'overlay', container_rootfs, 'overlay', linux.MS_NODEV,
         "lowerdir={image_root},upperdir={cow_rw},workdir={cow_workdir}".format(
@@ -97,9 +97,9 @@ def _create_mounts(new_root):
 
 
 def contain(command, image_name, image_dir, container_id, container_dir):
-    linux.unshare(linux.CLONE_NEWNS | linux.CLONE_NEWUTS) # create a new mount namespace
-    # switch to a new UTS namespace, change hostname to container_id
-    linux.sethostname(container_id)
+    linux.unshare(linux.CLONE_NEWNS)  # create a new mount namespace
+    linux.unshare(linux.CLONE_NEWUTS)  # switch to a new UTS namespace
+    linux.sethostname(container_id)  # change hostname to container_id
 
     linux.mount(None, '/', None, linux.MS_PRIVATE | linux.MS_REC, None)
 
@@ -131,11 +131,17 @@ def contain(command, image_name, image_dir, container_id, container_dir):
 def run(image_name, image_dir, container_dir, command):
     container_id = str(uuid.uuid4())
 
+    # TODO: Switching to a new PID namespace (using unshare) would only affect
+    #       the children of a process (because we can't change the PID of a
+    #       running process), so we'll have to unshare here OR replace
+    #       os.fork() with linux.clone()
+
     pid = os.fork()
     if pid == 0:
         # This is the child, we'll try to do some containment here
         try:
-            contain(command, image_name, image_dir, container_id, container_dir)
+            contain(command, image_name, image_dir, container_id,
+                    container_dir)
         except Exception:
             traceback.print_exc()
             os._exit(1)  # something went wrong in contain()
