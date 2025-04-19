@@ -118,8 +118,12 @@ def contain(command, image_name, image_dir, container_id, container_dir):
     linux.umount2('/old_root', linux.MNT_DETACH)  # umount old root
     os.rmdir('/old_root')  # rmdir the old_root dir
 
-    os.execvp(command[0], command)
+   # Ensure the child process is PID 1
+    if os.getpid() != 1:
+        print("Error: The child process is not PID 1")
+        os._exit(1)
 
+    os.execvp(command[0], command) 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True,))
 @click.option('--image-name', '-i', help='Image name', default='ubuntu')
@@ -131,25 +135,25 @@ def contain(command, image_name, image_dir, container_id, container_dir):
 def run(image_name, image_dir, container_dir, command):
     container_id = str(uuid.uuid4())
 
-    # TODO: Switching to a new PID namespace (using unshare) would only affect
-    #       the children of a process (because we can't change the PID of a
-    #       running process), so we'll have to unshare here OR replace
-    #       os.fork() with linux.clone()
+    # Switching to a new PID namespace (using unshare) would only affect
+    # the children of a process (because we can't change the PID of a
+    # running process), so we'll have to unshare here OR replace
+    # os.fork() with linux.clone()
+    linux.unshare(linux.CLONE_NEWPID)  # Unshare the PID namespace
 
     pid = os.fork()
     if pid == 0:
         # This is the child, we'll try to do some containment here
         try:
-            contain(command, image_name, image_dir, container_id,
-                    container_dir)
+            contain(command, image_name, image_dir, container_id, container_dir)
         except Exception:
             traceback.print_exc()
             os._exit(1)  # something went wrong in contain()
-
-    # This is the parent, pid contains the PID of the forked process
-    # wait for the forked child, fetch the exit status
-    _, status = os.waitpid(pid, 0)
-    print('{} exited with status {}'.format(pid, status))
+    else:
+        # This is the parent, pid contains the PID of the forked process
+        # wait for the forked child, fetch the exit status
+        _, status = os.waitpid(pid, 0)
+        print('{} exited with status {}'.format(pid, status))
 
 
 if __name__ == '__main__':
